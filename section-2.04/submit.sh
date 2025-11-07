@@ -7,4 +7,5 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=gpu-shd
 
-srun --ntasks=1 --cpus-per-task=1 rocprof --hsa-trace --sys-trace ./a.out
+# srun --ntasks=1 --cpus-per-task=1 rocprof --hsa-trace --sys-trace ./a.out
+srun --ntasks=1 --cpus-per-task=1 rocprof  --stats ./a.out

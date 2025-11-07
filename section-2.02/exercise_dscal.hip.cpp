@@ -28,6 +28,13 @@
 
 #include "hip/hip_runtime.h"
 
+__global__ void mykernel(int nlen, double a, double *x) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < nlen) {
+    x[i] = a * x[i];
+  }
+}
+
 /* Error checking routine and macro. */
 
 __host__ void myErrorHandler(hipError_t ifail, const std::string file, int line,
@@ -37,10 +44,10 @@ __host__ void myErrorHandler(hipError_t ifail, const std::string file, int line,
   { myErrorHandler((call), __FILE__, __LINE__, 1); }
 
 /* The number of integer elements in the array */
-#define ARRAY_LENGTH 256
+#define ARRAY_LENGTH 512
 
 /* Suggested kernel parameters */
-#define NUM_BLOCKS 1
+#define NUM_BLOCKS 2
 #define THREADS_PER_BLOCK 256
 
 /* Main routine */
@@ -95,6 +102,9 @@ int main(int argc, char *argv[]) {
   HIP_ASSERT(hipMemcpy(d_x, h_x, sz, hipMemcpyHostToDevice));
 
   /* ... kernel will be here  ... */
+  dim3 blocks = {(ARRAY_LENGTH + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, 1, 1};
+  dim3 threadsperblock = {THREADS_PER_BLOCK, 1, 1};
+  mykernel<<<blocks, threadsperblock>>>(ARRAY_LENGTH, a, d_x);
 
   /* copy the result array back to the host output array */
 

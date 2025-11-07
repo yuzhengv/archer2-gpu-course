@@ -32,8 +32,10 @@
 __host__ void myErrorHandler(hipError_t ifail, std::string file, int line,
                              int fatal);
 
-#define HIP_ASSERT(call)                                                       \
-  { myErrorHandler((call), __FILE__, __LINE__, 1); }
+#define HIP_ASSERT(call)                           \
+  {                                                \
+    myErrorHandler((call), __FILE__, __LINE__, 1); \
+  }
 
 /* Kernel parameters */
 
@@ -43,13 +45,23 @@ __host__ void myErrorHandler(hipError_t ifail, std::string file, int line,
 /* Kernel stub */
 
 __global__ void myKernel(int mrow, int ncol, double alpha, double *x, double *y,
-                         double *a) {
+                         double *a)
+{
+  // int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.x * blockDim.x + threadIdx.x;
+  int i = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (i < mrow && j < ncol)
+  {
+    a[i * ncol + j] = a[i * ncol + j] + alpha * x[i] * y[j];
+  }
   return;
 }
 
 /* Main routine */
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
   int mrow = 1024; /* Number of rows */
   int ncol = 512;  /* Number of columns */
@@ -72,7 +84,8 @@ int main(int argc, char *argv[]) {
 
   HIP_ASSERT(hipGetDeviceCount(&ndevice));
 
-  if (ndevice == 0) {
+  if (ndevice == 0)
+  {
     std::cout << "No GPU available!" << std::endl;
     std::exit(0);
   }
@@ -92,10 +105,12 @@ int main(int argc, char *argv[]) {
   assert(h_y);
   assert(h_a);
 
-  for (int i = 0; i < mrow; i++) {
+  for (int i = 0; i < mrow; i++)
+  {
     h_x[i] = 1.0 * i;
   }
-  for (int j = 0; j < ncol; j++) {
+  for (int j = 0; j < ncol; j++)
+  {
     h_y[j] = 1.0 * j;
   }
 
@@ -113,10 +128,13 @@ int main(int argc, char *argv[]) {
 
   /* Define the execution configuration and run the kernel */
 
-  uint nblockx = 1 + (mrow - 1) / THREADS_PER_BLOCK_1D;
-  uint nblocky = 1;
-  dim3 blocks = {nblockx, nblocky, 1};
-  dim3 threadsPerBlock = {THREADS_PER_BLOCK_1D, 1, 1};
+  // uint nblockx = 1 + (mrow - 1) / THREADS_PER_BLOCK_1D;
+  // uint nblocky = 1;
+
+  uint nblockx = 1 + (mrow - 1) / THREADS_PER_BLOCK_2D;
+  uint nblocky = 1 + (ncol - 1) / THREADS_PER_BLOCK_2D;
+  dim3 blocks = {nblocky, nblockx, 1};
+  dim3 threadsPerBlock = {THREADS_PER_BLOCK_2D, THREADS_PER_BLOCK_2D, 1};
 
   myKernel<<<blocks, threadsPerBlock>>>(mrow, ncol, alpha, d_x, d_y, d_a);
 
@@ -130,9 +148,12 @@ int main(int argc, char *argv[]) {
 
   int ncorrect = 0;
   std::cout << "Results:" << std::endl;
-  for (int i = 0; i < mrow; i++) {
-    for (int j = 0; j < ncol; j++) {
-      if (fabs(h_a[ncol * i + j] - alpha * h_x[i] * h_y[j]) < DBL_EPSILON) {
+  for (int i = 0; i < mrow; i++)
+  {
+    for (int j = 0; j < ncol; j++)
+    {
+      if (fabs(h_a[ncol * i + j] - alpha * h_x[i] * h_y[j]) < DBL_EPSILON)
+      {
         ncorrect += 1;
       }
     }
@@ -160,9 +181,11 @@ int main(int argc, char *argv[]) {
  * Return codes may be asynchronous, and thus misleading! */
 
 __host__ void myErrorHandler(hipError_t ifail, const std::string file, int line,
-                             int fatal) {
+                             int fatal)
+{
 
-  if (ifail != hipSuccess) {
+  if (ifail != hipSuccess)
+  {
     std::cerr << "Line " << line << " (" << file
               << "): " << hipGetErrorName(ifail) << ": "
               << hipGetErrorString(ifail) << std::endl;

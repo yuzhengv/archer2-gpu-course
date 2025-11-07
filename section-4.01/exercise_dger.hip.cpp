@@ -29,8 +29,10 @@
 __host__ void myErrorHandler(hipError_t ifail, std::string file, int line,
                              int fatal);
 
-#define HIP_ASSERT(call)                                                       \
-  { myErrorHandler((call), __FILE__, __LINE__, 1); }
+#define HIP_ASSERT(call)                           \
+  {                                                \
+    myErrorHandler((call), __FILE__, __LINE__, 1); \
+  }
 
 /* Kernel parameters */
 
@@ -40,12 +42,14 @@ __host__ void myErrorHandler(hipError_t ifail, std::string file, int line,
 /* Kernel */
 
 __global__ void myKernel(int mrow, int ncol, double alpha, double *x, double *y,
-                         double *a) {
+                         double *a)
+{
 
   int j = blockIdx.x * blockDim.x + threadIdx.x;
   int i = blockIdx.y * blockDim.y + threadIdx.y;
 
-  if (i < mrow && j < ncol) {
+  if (i < mrow && j < ncol)
+  {
     a[i * ncol + j] = a[i * ncol + j] + alpha * x[i] * y[j];
   }
 
@@ -54,7 +58,8 @@ __global__ void myKernel(int mrow, int ncol, double alpha, double *x, double *y,
 
 /* Main routine */
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
   int mrow = 1024; /* Number of rows */
   int ncol = 512;  /* Number of columns */
@@ -68,6 +73,10 @@ int main(int argc, char *argv[]) {
   double *d_y = NULL;
   double *d_a = NULL;
 
+  hipStream_t stream_x, stream_y;
+  HIP_ASSERT(hipStreamCreate(&stream_x));
+  HIP_ASSERT(hipStreamCreate(&stream_y));
+
   /* Check we have a GPU, and get device name from the hipDeviceProp_t
    * structure. This is for information. */
 
@@ -77,7 +86,8 @@ int main(int argc, char *argv[]) {
 
   HIP_ASSERT(hipGetDeviceCount(&ndevice));
 
-  if (ndevice == 0) {
+  if (ndevice == 0)
+  {
     std::cout << "No GPU available!" << std::endl;
     std::exit(0);
   }
@@ -97,10 +107,12 @@ int main(int argc, char *argv[]) {
   assert(h_y);
   assert(h_a);
 
-  for (int i = 0; i < mrow; i++) {
+  for (int i = 0; i < mrow; i++)
+  {
     h_x[i] = 1.0 * i;
   }
-  for (int j = 0; j < ncol; j++) {
+  for (int j = 0; j < ncol; j++)
+  {
     h_y[j] = 1.0 * j;
   }
 
@@ -112,8 +124,8 @@ int main(int argc, char *argv[]) {
   HIP_ASSERT(hipMalloc(&d_a, mrow * ncol * sizeof(double)));
 
   hipMemcpyKind kind = hipMemcpyHostToDevice;
-  HIP_ASSERT(hipMemcpy(d_x, h_x, mrow * sizeof(double), kind));
-  HIP_ASSERT(hipMemcpy(d_y, h_y, ncol * sizeof(double), kind));
+  HIP_ASSERT(hipMemcpyAsync(d_x, h_x, mrow * sizeof(double), kind, stream_x));
+  HIP_ASSERT(hipMemcpyAsync(d_y, h_y, ncol * sizeof(double), kind, stream_y));
   HIP_ASSERT(hipMemset(d_a, 0, mrow * ncol * sizeof(double)));
 
   /* Define the execution configuration and run the kernel */
@@ -122,6 +134,9 @@ int main(int argc, char *argv[]) {
   uint nblocky = 1 + (ncol - 1) / THREADS_PER_BLOCK_2D;
   dim3 blocks = {nblocky, nblockx, 1};
   dim3 threadsPerBlock = {THREADS_PER_BLOCK_2D, THREADS_PER_BLOCK_2D, 1};
+
+  hipStreamSynchronize(stream_x);
+  hipStreamSynchronize(stream_y);
 
   myKernel<<<blocks, threadsPerBlock>>>(mrow, ncol, alpha, d_x, d_y, d_a);
 
@@ -135,9 +150,12 @@ int main(int argc, char *argv[]) {
 
   int ncorrect = 0;
   std::cout << "Results:" << std::endl;
-  for (int i = 0; i < mrow; i++) {
-    for (int j = 0; j < ncol; j++) {
-      if (fabs(h_a[ncol * i + j] - alpha * h_x[i] * h_y[j]) < DBL_EPSILON) {
+  for (int i = 0; i < mrow; i++)
+  {
+    for (int j = 0; j < ncol; j++)
+    {
+      if (fabs(h_a[ncol * i + j] - alpha * h_x[i] * h_y[j]) < DBL_EPSILON)
+      {
         ncorrect += 1;
       }
     }
@@ -147,9 +165,13 @@ int main(int argc, char *argv[]) {
 
   /* Release resources */
 
+  HIP_ASSERT(hipStreamDestroy(stream_x));
+  HIP_ASSERT(hipStreamDestroy(stream_y));
+
   HIP_ASSERT(hipFree(d_y));
   HIP_ASSERT(hipFree(d_x));
   HIP_ASSERT(hipFree(d_a));
+
   delete h_a;
   delete h_x;
   delete h_y;
@@ -165,9 +187,11 @@ int main(int argc, char *argv[]) {
  * Return codes may be asynchronous, and thus misleading! */
 
 __host__ void myErrorHandler(hipError_t ifail, const std::string file, int line,
-                             int fatal) {
+                             int fatal)
+{
 
-  if (ifail != hipSuccess) {
+  if (ifail != hipSuccess)
+  {
     std::cerr << "Line " << line << " (" << file
               << "): " << hipGetErrorName(ifail) << ": "
               << hipGetErrorString(ifail) << std::endl;

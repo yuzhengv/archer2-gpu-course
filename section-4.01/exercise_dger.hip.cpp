@@ -100,8 +100,9 @@ int main(int argc, char *argv[])
 
   /* Establish host data (with some initial values for x and y) */
 
-  h_x = new double[mrow];
-  h_y = new double[ncol];
+  hipHostMalloc(&h_x, mrow * sizeof(double));
+  hipHostMalloc(&h_y, ncol * sizeof(double));
+
   h_a = new double[mrow * ncol];
   assert(h_x);
   assert(h_y);
@@ -173,8 +174,8 @@ int main(int argc, char *argv[])
   HIP_ASSERT(hipFree(d_a));
 
   delete h_a;
-  delete h_x;
-  delete h_y;
+  hipHostFree(h_x);
+  hipHostFree(h_y);
 
   return 0;
 }

@@ -116,9 +116,9 @@ int main(int argc, char *argv[])
     y[j] = 1.0 * j;
   }
 
-  HIP_ASSERT(hipMemPrefetchAsync(x, mrow * sizeof(double), deviceNum, 0));
-  HIP_ASSERT(hipMemPrefetchAsync(y, ncol * sizeof(double), deviceNum, 0));
-  HIP_ASSERT(hipMemPrefetchAsync(a, mrow * ncol * sizeof(double), deviceNum, 0));
+  HIP_ASSERT(hipMemPrefetchAsync(x, mrow * sizeof(double), deviceNum));
+  HIP_ASSERT(hipMemPrefetchAsync(y, ncol * sizeof(double), deviceNum));
+  // HIP_ASSERT(hipMemPrefetchAsync(a, mrow * ncol * sizeof(double), deviceNum, 0));
 
   /* Establish device data and initialise A to zero on the device */
   /* Copy the initial values of x and y to device memory */
@@ -143,6 +143,8 @@ int main(int argc, char *argv[])
 
   HIP_ASSERT(hipPeekAtLastError());
   HIP_ASSERT(hipDeviceSynchronize());
+
+  HIP_ASSERT(hipMemPrefetchAsync(a, mrow * ncol * sizeof(double), hipcpuDeviceId));
 
   /* Retrieve the results to h_a and check the results */
 

@@ -23,20 +23,25 @@
 __host__ void myErrorHandler(hipError_t ifail, std::string file, int line,
                              int fatal);
 
-#define HIP_ASSERT(call)                                                       \
-  { myErrorHandler((call), __FILE__, __LINE__, 1); }
+#define HIP_ASSERT(call)                           \
+  {                                                \
+    myErrorHandler((call), __FILE__, __LINE__, 1); \
+  }
 
 /* Kernel parameters */
 
 #define THREADS_PER_BLOCK 256
 
-__global__ void ddot(int n, double *x, double *y, double *result) {
+__global__ void ddot_serial(int n, double *x, double *y, double *result)
+{
 
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-  if (tid == 0) {
+  if (tid == 0)
+  {
     double sum = 0.0;
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
+    {
       sum += x[i] * y[i];
     }
     *result = sum;
@@ -45,9 +50,57 @@ __global__ void ddot(int n, double *x, double *y, double *result) {
   return;
 }
 
+__global__ void ddot_parallel(int n, double *x, double *y, double *result)
+{
+
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  double sum = 0.0;
+  __shared__ double tmp[THREADS_PER_BLOCK];
+
+  // Step 1: calculate partial multiplications
+  tmp[threadIdx.x] = 0.0;
+  if (tid < n)
+    tmp[threadIdx.x] = x[tid] * y[tid];
+
+  __syncthreads();
+
+  if (threadIdx.x == 0)
+  {
+    // Step 2: local reduction
+    for (int i = 0; i < THREADS_PER_BLOCK; i++)
+    {
+      sum += tmp[i];
+    }
+
+    // Step 3: atomic sum
+    atomicAdd(result, sum)
+  }
+
+  return;
+}
+
+__global__ void ddot_atomic(int n, double *x, double *y, double *result)
+{
+
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  // double sum = 0.0;
+
+  // for (int i = 0; i < n; i++)
+  // {
+  //   sum += x[i] * y[i];
+  // }
+  // *result = sum;
+
+  if (tid < n)
+    atomicAdd(result, x[tid] * y[tid]);
+
+  return;
+}
+
 /* Main routine */
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
   int nvector = 2048 * 64; /* Length of vectors x, y */
 
@@ -66,10 +119,12 @@ int main(int argc, char *argv[]) {
   assert(h_x);
   assert(h_y);
 
-  for (int i = 0; i < nvector; i++) {
+  for (int i = 0; i < nvector; i++)
+  {
     h_x[i] = 1.0 * i;
   }
-  for (int j = 0; j < nvector; j++) {
+  for (int j = 0; j < nvector; j++)
+  {
     h_y[j] = 2.0 * j;
   }
 
@@ -92,7 +147,7 @@ int main(int argc, char *argv[]) {
   dim3 blocks = {nblockx, 1, 1};
   dim3 threadsPerBlock = {THREADS_PER_BLOCK, 1, 1};
 
-  ddot<<<blocks, threadsPerBlock>>>(nvector, d_x, d_y, d_result);
+  ddot_parallel<<<blocks, threadsPerBlock>>>(nvector, d_x, d_y, d_result);
 
   HIP_ASSERT(hipPeekAtLastError());
   HIP_ASSERT(hipDeviceSynchronize());
@@ -103,16 +158,20 @@ int main(int argc, char *argv[]) {
   HIP_ASSERT(hipMemcpy(&h_result, d_result, sizeof(double), kind));
 
   double result = 0.0;
-  for (int i = 0; i < nvector; i++) {
+  for (int i = 0; i < nvector; i++)
+  {
     result += h_x[i] * h_y[i];
   }
   std::cout << std::setprecision(8);
   std::cout << "Result for device dot product is: " << h_result << " (correct "
             << result << ")" << std::endl;
   std::cout << std::defaultfloat;
-  if (fabs(h_result - result) < DBL_EPSILON) {
+  if (fabs(h_result - result) < DBL_EPSILON)
+  {
     std::cout << "Correct" << std::endl;
-  } else {
+  }
+  else
+  {
     std::cout << "FAIL!" << std::endl;
   }
 
@@ -135,9 +194,11 @@ int main(int argc, char *argv[]) {
  * Return codes may be asynchronous, and thus misleading! */
 
 __host__ void myErrorHandler(hipError_t ifail, const std::string file, int line,
-                             int fatal) {
+                             int fatal)
+{
 
-  if (ifail != hipSuccess) {
+  if (ifail != hipSuccess)
+  {
     std::cerr << "Line " << line << " (" << file
               << "): " << hipGetErrorName(ifail) << ": "
               << hipGetErrorString(ifail) << std::endl;
